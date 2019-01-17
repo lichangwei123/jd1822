@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="utf-8" />
+		<title></title>
+	</head>
+	<link rel="stylesheet" type="text/css" href="css/dahuiji.css" />
+
+	<body>
+		<div class="main" id="main">
+			<div id="score"></div>
+			<ul class="options" id="options">
+				<li level="200">非常简单</li>
+				<li level="500">比较简单</li>
+				<li level="1000">比较困难</li>
+				<li level="1500">非常困难</li>
+			</ul>
+		</div>
+	</body>
+
+</html>
+<script src="js/public.js"></script>
+<script src="js/myplane.js"></script>
+<script src="js/gameengine.js"></script>
+<script src="js/bullet.js"></script>
+<script src="js/enemy.js"></script>
+<script type="text/javascript">
+	/*
+				分析 --四个角色： 
+				 	游戏引擎 (单例模式)：  
+				 		属性 ： main
+				 		功能 ： init    动画加载  ....
+				 	敌机 :
+				 		属性 ： 动态创建的div
+				 		功能 ： init    move    碰撞 ...
+				 	战斗机(单例模式):
+				 		属性 ： 动态创建的元素
+				 		功能： init  move  开火（引出子弹）...
+				 	子弹 ： 
+				 		属性 ：动态创建元素
+				 		功能 ：init move   碰撞...
+				*/
+	window.onload = function() {
+		new GameEngine().init();
+	}
+	//游戏引擎
+	function GameEngine() {
+		if(!GameEngine.instance) {
+			GameEngine.instance = {
+				body: document.getElementById("main"),
+				oUl: document.getElementById("options"),
+				enemes: new Set(),
+				init: function() {
+					this.oUl.onclick = function(e) {
+						var e = e || event;
+						var target = e.target || e.srcElement;
+						if(target.tagName == "LI") {
+							this.level = target.getAttribute("level");
+							this.oUl.remove();
+							this.autoplay();
+						}
+					}.bind(this)
+				},
+				autoplay: function() {
+					var logo = document.createElement("div");
+					logo.className = "logo";
+					this.append(logo);
+					var loading = create("div");
+					loading.className = "loading";
+					this.append(loading);
+					var index = 1;
+					var timer = setInterval(function() {
+						loading.style.backgroundImage = `url(images/loading${++index}.png)`;
+						if(index == 3) {
+							index = 0;
+						}
+					}, 600)
+					//背景动画
+					var count = 0;
+					setInterval(function() {
+						this.body.style.backgroundPositionY = ++count + "px";
+					}.bind(this), 50)
+					//经过3秒钟后logo和loading消失游戏开始
+					setTimeout(function() {
+						logo.remove();
+						loading.remove();
+						clearInterval(timer);
+						this.gameStart();
+					}.bind(this), 3000)
+				},
+				append: function() {
+					this.body.appendChild(obj);
+				},
+				gameStart: function() {
+					//游戏开始
+					new MyPlane().init().Fire(), move("mouse");
+					this.autoCreateEnemy();
+					//战斗机
+					function MyPlane() {
+						if(!MyPlane.instance) {
+							MyPlane.instance = {
+								body: create("div"),
+								init: function() {
+									new GameEngine().append(this.body);
+									this.body.style.bottom;
+									this.left((new GameEngine() - this.width() / 2));
+									return this;
+								},
+								fire: function() {
+									setInterval(function() { //子弹出场
+											new Bullet().init().move()
+											//子弹
+											function Bullet() {
+												//定义子弹属性
+												this.body = create("div");
+												this.init = function() {
+													this.body.className = "bullet";
+													new GameEngine().append(this.body);
+													this.left(new MyPlane().width() / 2 + new MyPlane().left() - this.width() / 2);
+													this.top(new MyPlane().top() - this.height());
+													return this;
+												}
+
+												this.move = function() {
+													this.timer = setInterval(function() {
+														this.top(this.top() - 8);
+														this.destroy();
+														clearInterval(this.timer);
+														//碰撞检测
+														var enemes = new GameEngine().enemes;
+
+														for(var en of enemes) {
+															if(pz(this.body, en.body)) {
+																this.destroy();
+																clearInterval(this.timer);
+																en.hurt()
+															}
+														}
+
+													}.bind(this), 30)
+												}
+												this.destroy = function() {
+													this.body.className = "bullet_die";
+													setTimeout(function() {
+														this.body.remove();
+													}.bind(this), 500)
+												}
+
+												this.width = function() {
+													return this.body.offsetHeight
+												}
+												this.left = function(val) {
+													if(val || val == 0) {
+														this.body.style.left = val + "px";
+														return;
+													}
+													return this.body.offsetLeft;
+												}
+												this.top = function(val) {
+													if(val || val == 0) {
+														this.body.style.top = val + "px";
+														return;
+													}
+													return this.body.offsetTop
+												}
+											}
+											///////////////////////
+
+										},
+										new GameEngine().level)
+									return this
+								},
+								move: function(type) {
+									switch(type) {
+										case "mouse":
+											{
+												new GameEngine().body.onmousemove = function(e) {
+													var e = e || event;
+													var x = e.pageX - new GameEngine().left() - this.width() / 2;
+													var maxL = new GameEngine().width() - this.width();
+													x = x < 0 ? 0 : (x > maxL ? maxL : x);
+													this.left(x)
+												}.bind(this);
+												break;
+											}
+										case "key":
+											{
+												document.onkeydown = function(e) {
+													var e = e || event;
+													var code = e.keyCode || e.which;
+													switch(code) {
+														case 37:
+															{
+																var x1 = Math.max(0, x1);
+																this.left(x1);
+																break;
+															};
+														case 39:
+															{
+																var x2 = this.left() + 5;
+																var maxL = new GameEngine().width() - this.width();
+																var x2 = this.left() + 5;
+																var maxL = new GameEnergy().width() - this.width();
+																x2 = Math.min(x2, maxL);
+																this.left(x2);
+																break;
+															}
+													}
+												}.bind(this)
+												break;
+											}
+									}
+								},
+								width: function() {
+									return this.body.offsetWidth
+								},
+								height: function() {
+									return this.body.offsetHeight
+								},
+								left: function(val) {
+									if(val || val == 0) {
+										this.body.style.left = val + "px";
+										return;
+									}
+									return this.body.offsetLeft
+								},
+								top: function() {
+									return this.body.offsetTop
+								}
+							}
+						}
+						return MyPlane.instance
+					}
+				},
+
+				//创建敌机
+				autoCreateEnemy: function() {
+					setInterval(function() {
+						if(Math.random() > 0.2) {
+							var en = new Enemy("small");
+							this.enemes.add(en);
+							en.init();
+							en.move();
+						}
+					}.bind(this), 800)
+
+					setInterval(function() {
+						if(Math.random() > 0.5) {
+							var en1 = new Enemy("middle")
+							this.enemes.add(en1);
+							en1.init();
+							en1.move();
+						}
+					}, 1500)
+
+					setInterval(function() {
+						if(Math.random() > 0.7) {
+							var en2 = new Enemy("large");
+							this.enemes.add(en2);
+							en2.init();
+							en2.move()
+						}
+					}, 5000)
+				},
+				width: function() {
+					return this.body.offsetHeight
+				},
+				left: function() {
+					return this.body.offsetLeft;
+				},
+				top: function() {
+					return this.body.offsetTop
+				}
+			}
+		}
+		return GameEngine.instance
+	}
+
+	//敌机
+	function Enemy(type) {
+		this.type = type;
+		this.body = create("div");
+		this.init = function() {
+			switch(this.type) {
+				case "small":
+					{
+						this.speed = 7;
+						this.hp = 1;
+						this.imgs = ["plain1_die1.png", "plain1_die2.png", "plain1_die3.png"];
+						this.body.className = "enemy-small";
+						new GameEngine().append(this.body);
+						this.left(rand(0, new GameEngine().width() - this.width()));
+						this.top(-this.height());
+						break;
+					}
+				case "middle":
+					{
+						this.imgs = ["plain2_die1.png", "plain2_die2.png", "plain2_die3.png", "plain2_die4.png"];
+						this.speed = 5;
+						this.hp = 3;
+						this.body.className = "enemy-middle";
+						new GameEngine().append(this.body);
+						this.left(rand(0, new GameEngine().width() - this.width()));
+						this.top(-this.height());
+						break;
+					}
+				case "large":
+					{
+						this.imgs = ["plain3_die1.png", "plain3_die2.png", "plain3_die3.png", "plain3_die4.png", "plain3_die5.png", "plain3_die6.png"]; //存放大敌机销毁图片
+						this.speed = 2; //速度
+						this.hp = 6; //血值
+						this.body.className = "enemy-large";
+						new GameEngine().append(this.body);
+						//设置敌机的初始位置
+						this.left(rand(0, new GameEngine().width() - this.width()));
+						this.top(-this.height());
+						break;
+					}
+			}
+			return this;
+		}
+		this.move = function() {
+			var timer = setInterval(function() {
+				this.top(this.top() + this.speed);
+				if(this.top() > new GameEngine().height()) {
+					this.destroy();
+					clearInterval(this.timer)
+				}
+			}.bind(this), 30)
+			return this;
+		}
+		this.destroy = function() {
+			new GameEngine().enemes.delete(this);
+			clearInterval(this.timer);
+			var timer = setInterval(function() {
+				if(this.imgs.length == 0) {
+					clearInterval(timer);
+					this.body.remove()
+				}
+			}.bind(this), 500)
+		}
+		this.hurt = function() {
+			--this.hp;
+			if(this.hp == 0) {
+				this.destroy();
+			}
+		}
+		this.width = function() {
+			return this.body.offsetWidth
+		}
+		this.height = function() {
+			return this.body.offsetHeight;
+		}
+		this.top = function(val) {
+			if(val || val == 0) {
+				this.body.style.top = val + "px";
+				return
+			}
+			return this.body.offsetTop
+		}
+	}
+	
+</script>
+<script>
+</script>
